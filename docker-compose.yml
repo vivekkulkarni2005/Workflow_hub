@@ -1,0 +1,90 @@
+# ---------------------------------------------------------------------------
+# One command brings up the whole stack:
+#   docker compose up --build
+#   -> app on http://localhost:4000, mongo on 27017, redis on 6379
+#
+# Only the app publishes a port. Mongo/Redis stay on the internal network unless
+# you need to inspect them locally (they already have `ports` for that).
+# ---------------------------------------------------------------------------
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: workflow-hub-app
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: 4000
+      LOG_LEVEL: info
+      # Service names resolve through Docker's embedded DNS on the compose network.
+      MONGODB_URI: mongodb://mongo:27017/workflow-hub
+      REDIS_URL: redis://redis:6379
+      REDIS_IN_MEMORY: "false"
+      # These defaults exist so `docker compose up --build` works on a clean
+      # checkout with zero setup. They are PUBLICLY KNOWN values: override both
+      # with real secrets before deploying anywhere reachable. The app refuses
+      # to boot in production if they still contain the literal "change-me".
+      JWT_ACCESS_SECRET: ${JWT_ACCESS_SECRET:-dev-only-access-secret-override-before-deploy}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-dev-only-refresh-secret-override-before-deploy}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:5173}
+      RATE_LIMIT_MAX: ${RATE_LIMIT_MAX:-300}
+      RATE_LIMIT_AUTH_MAX: ${RATE_LIMIT_AUTH_MAX:-10}
+    ports:
+      - "4000:4000"
+    depends_on:
+      mongo:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - "require('http').get('http://127.0.0.1:4000/health/ready',r=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))"
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 20s
+
+  mongo:
+    image: mongo:7
+    container_name: workflow-hub-mongo
+    restart: unless-stopped
+    command: ["--quiet"]
+    environment:
+      MONGO_INITDB_DATABASE: workflow-hub
+    volumes:
+      - mongo-data:/data/db
+    ports:
+      - "27017:27017"
+    healthcheck:
+      # `ping` is the cheapest command that still proves the server is accepting writes.
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    container_name: workflow-hub-redis
+    restart: unless-stopped
+    # appendonly: writes the rate-limit counters and presence sets to disk so a
+    # restart does not hand every client a fresh allowance.
+    command: ["redis-server", "--appendonly", "yes", "--save", "60", "1"]
+    volumes:
+      - redis-data:/data
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  mongo-data:
+  redis-data:

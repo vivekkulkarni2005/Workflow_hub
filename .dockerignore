@@ -1,0 +1,22 @@
+node_modules
+npm-debug.log*
+.git
+.gitignore
+
+# Never bake secrets into an image layer.
+.env
+.env.*
+!.env.example
+
+# Not needed at runtime: tests, docs and the Postman collection.
+tests
+docs
+postman
+jest.config.js
+README.md
+*.md
+
+# Local artifacts
+coverage
+*.log
+testout.txt

@@ -1,0 +1,323 @@
+{
+  "info": {
+    "_postman_id": "b3f1c2d4-5a6b-4c7d-8e9f-0a1b2c3d4e5f",
+    "name": "workflow-hub API",
+    "description": "Real-time workspace/task backend. Run `docker compose up --build` first, or `npm run dev`.\n\nThe collection is self-chaining: `Register` stores the session cookies, `Login` re-establishes them, and `Create workspace` saves the workspace id into a collection variable that every later request reads.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:4000" },
+    { "key": "workspaceId", "value": "" },
+    { "key": "taskId", "value": "" },
+    { "key": "email", "value": "demo@workflow-hub.test" },
+    { "key": "password", "value": "DemoPass123!" },
+    { "key": "memberEmail", "value": "member@workflow-hub.test" }
+  ],
+  "item": [
+    {
+      "name": "Health",
+      "item": [
+        {
+          "name": "Liveness",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/health", "host": ["{{baseUrl}}"], "path": ["health"] }
+          }
+        },
+        {
+          "name": "Readiness (mongo + redis)",
+          "request": {
+            "method": "GET",
+            "url": { "raw": "{{baseUrl}}/health/ready", "host": ["{{baseUrl}}"], "path": ["health", "ready"] }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Auth",
+      "item": [
+        {
+          "name": "Register",
+          "description": "Returns the session user and sets the auth cookies. Run `Create workspace` next to capture {{workspaceId}}.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "const b = pm.response.json();",
+                  "pm.test('returns the session user', () => pm.expect(b.user.email).to.eql(pm.collectionVariables.get('email')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Demo User\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "register"]
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200', () => pm.response.to.have.status(200));",
+                  "const b = pm.response.json();",
+                  "pm.test('returns the session user', () => pm.expect(b.user.email).to.eql(pm.collectionVariables.get('email')));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "login"]
+            }
+          }
+        },
+        {
+          "name": "Me",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "me"]
+            }
+          }
+        },
+        {
+          "name": "Refresh (rotates the cookie)",
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/refresh",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "refresh"]
+            }
+          }
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "auth", "logout"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Workspaces",
+      "item": [
+        {
+          "name": "List mine (cursor paginated)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workspaces?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "workspaces"],
+              "query": [{ "key": "limit", "value": "20" }]
+            }
+          }
+        },
+        {
+          "name": "Create",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('workspaceId', pm.response.json().workspace._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Engineering\",\n  \"description\": \"Created from Postman\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workspaces",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "workspaces"]
+            }
+          }
+        },
+        {
+          "name": "Get one (id or slug)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workspaces/{{workspaceId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "workspaces", "{{workspaceId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update (admin/owner)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"description\": \"Updated from Postman\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workspaces/{{workspaceId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "workspaces", "{{workspaceId}}"]
+            }
+          }
+        },
+        {
+          "name": "Members",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workspaces/{{workspaceId}}/members",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "workspaces", "{{workspaceId}}", "members"]
+            }
+          }
+        },
+        {
+          "name": "Activity log",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workspaces/{{workspaceId}}/activity?limit=20",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "workspaces", "{{workspaceId}}", "activity"],
+              "query": [{ "key": "limit", "value": "20" }]
+            }
+          }
+        },
+        {
+          "name": "Report (aggregation, Redis cached)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workspaces/{{workspaceId}}/reports",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "workspaces", "{{workspaceId}}", "reports"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Tasks",
+      "item": [
+        {
+          "name": "List (filters + cursor)",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workspaces/{{workspaceId}}/tasks?status=todo&limit=20&sort=createdAt",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "workspaces", "{{workspaceId}}", "tasks"],
+              "query": [
+                { "key": "status", "value": "todo", "description": "Repeatable: status=todo&status=doing" },
+                { "key": "assignee", "value": "me", "description": "me | unassigned | <userId>" },
+                { "key": "overdue", "value": "true" },
+                { "key": "q", "value": "fix", "description": "Anchored title prefix search" },
+                { "key": "sort", "value": "createdAt", "description": "createdAt | dueDate | priority | status" },
+                { "key": "limit", "value": "20" },
+                { "key": "cursor", "value": "", "description": "Opaque; from the previous page's nextCursor" }
+              ]
+            }
+          }
+        },
+        {
+          "name": "Create",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('201', () => pm.response.to.have.status(201));",
+                  "pm.collectionVariables.set('taskId', pm.response.json().task._id);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"title\": \"Ship the report endpoint\",\n  \"description\": \"Wire the aggregation to the compound index.\",\n  \"status\": \"doing\",\n  \"priority\": \"urgent\",\n  \"dueDate\": \"2030-01-01T00:00:00.000Z\",\n  \"labels\": [\"backend\", \"perf\"]\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workspaces/{{workspaceId}}/tasks",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "workspaces", "{{workspaceId}}", "tasks"]
+            }
+          }
+        },
+        {
+          "name": "Get one",
+          "request": {
+            "method": "GET",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workspaces/{{workspaceId}}/tasks/{{taskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "workspaces", "{{workspaceId}}", "tasks", "{{taskId}}"]
+            }
+          }
+        },
+        {
+          "name": "Update (admin/owner)",
+          "request": {
+            "method": "PATCH",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": { "mode": "raw", "raw": "{\n  \"status\": \"done\"\n}" },
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workspaces/{{workspaceId}}/tasks/{{taskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "workspaces", "{{workspaceId}}", "tasks", "{{taskId}}"]
+            }
+          }
+        },
+        {
+          "name": "Delete (admin/owner)",
+          "request": {
+            "method": "DELETE",
+            "url": {
+              "raw": "{{baseUrl}}/api/v1/workspaces/{{workspaceId}}/tasks/{{taskId}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api", "v1", "workspaces", "{{workspaceId}}", "tasks", "{{taskId}}"]
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

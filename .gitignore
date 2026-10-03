@@ -1,0 +1,24 @@
+node_modules/
+npm-debug.log*
+yarn-error.log*
+logs/
+*.log
+coverage/
+dist/
+build/
+
+# Secrets and local overrides. `.env.example` IS committed; `.env` never is.
+.env
+.env.*
+!.env.example
+
+# Editor / OS noise
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Test + benchmark artifacts
+/tmp/
+test-results/
+*.tsbuildinfo
